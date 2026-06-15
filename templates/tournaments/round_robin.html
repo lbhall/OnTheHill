@@ -64,6 +64,14 @@
               <td>
                 {% if match.winner %}
                   <span class="text-green" style="font-weight:600;">{{ match.winner.player.name }}</span>
+                  {% if can_manage %}
+                    <form method="post" action="{% url 'undo_match_result' tournament.pk match.pk %}" style="display:inline;margin-left:8px;">
+                      {% csrf_token %}
+                      <button type="submit" title="Undo result"
+                              onclick="return confirm('Undo this result?')"
+                              style="background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:0.9rem;padding:0;">↺</button>
+                    </form>
+                  {% endif %}
                 {% elif can_manage %}
                   <form method="post" action="{% url 'record_match_result' tournament.pk match.pk %}" style="display:flex;gap:6px;align-items:center;">
                     {% csrf_token %}

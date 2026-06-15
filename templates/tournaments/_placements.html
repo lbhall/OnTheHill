@@ -1,0 +1,17 @@
+{% if placements %}
+  <div class="card placements-card" style="margin-bottom:24px;">
+    <div class="card-header"><span class="card-title">🏆 Placements</span></div>
+    <table style="width:100%;">
+      <tbody>
+        {% for label, entries in placements %}
+          <tr>
+            <td style="width:60px;color:var(--muted);font-weight:700;font-size:0.85rem;padding:6px 0;">{{ label }}</td>
+            <td style="padding:6px 0;">
+              {% for entry in entries %}<span style="font-weight:600;{% if label == '1st' %}color:var(--green);{% endif %}">{{ entry.player.name }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}

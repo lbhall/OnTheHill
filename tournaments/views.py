@@ -13,9 +13,12 @@ from .bracket import (
     generate_round_robin,
     record_result,
     record_de_result,
+    undo_result,
     get_bracket_rounds,
     get_de_data,
     get_round_robin_standings,
+    get_se_placements,
+    get_de_placements,
 )
 
 
@@ -63,6 +66,16 @@ def create_tournament(request):
     else:
         form = TournamentForm()
     return render(request, 'tournaments/create_tournament.html', {'form': form})
+
+
+@login_required
+@require_POST
+def delete_tournament(request, pk):
+    tournament = get_object_or_404(Tournament, pk=pk, created_by=request.user)
+    name = tournament.name
+    tournament.delete()
+    messages.success(request, f'Tournament "{name}" deleted.')
+    return redirect('home')
 
 
 @login_required
@@ -195,9 +208,11 @@ def bracket_view(request, pk):
         rounds = get_bracket_rounds(tournament)
         round_labels = _round_labels(rounds)
         context['bracket'] = list(zip(round_labels, rounds))
+        context['placements'] = get_se_placements(tournament)
         return render(request, 'tournaments/bracket.html', context)
     elif tournament.format == 'double_elim':
         context.update(get_de_data(tournament))
+        context['placements'] = get_de_placements(tournament)
         return render(request, 'tournaments/double_elimination.html', context)
     else:
         matches = tournament.matches.select_related('player1__player', 'player2__player', 'winner__player')
@@ -250,3 +265,20 @@ def record_match_result(request, pk, match_id):
         messages.success(request, f'{entry.player.name} advances!')
 
     return redirect('bracket', pk=pk)
+
+
+@login_required
+@require_POST
+def undo_match_result(request, pk, match_id):
+    tournament = get_object_or_404(Tournament, pk=pk, created_by=request.user)
+    match = get_object_or_404(Match, pk=match_id, tournament=tournament)
+
+    success, error = undo_result(match)
+    if success:
+        messages.success(request, 'Result undone.')
+    else:
+        messages.error(request, error or 'Could not undo result.')
+
+    if tournament.format == 'round_robin' or tournament.status != 'pending':
+        return redirect('bracket', pk=pk)
+    return redirect('tournament_detail', pk=pk)

@@ -86,10 +86,50 @@
   .match-card.ready .match-player:hover .pick-btn { opacity: 1; }
   .match-card.ready .match-player:hover { background: var(--surface2); }
 
-  .bracket-round:not(:last-child) .match-slot::after {
+  /* Winners-bracket connectors: L-shape pairs converging on the next-round match */
+  .bracket-wrap.winners-bracket .bracket-round:not(:last-child) .match-slot:nth-child(odd)::after {
     content: '';
     position: absolute;
     right: 0;
+    top: 50%;
+    bottom: 0;
+    width: 16px;
+    border-top: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  .bracket-wrap.winners-bracket .bracket-round:not(:last-child) .match-slot:nth-child(even)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 50%;
+    width: 16px;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  .bracket-wrap.winners-bracket .bracket-round:not(:first-child) .match-slot::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Losers-bracket connectors: straight horizontal lines (no halving) */
+  .bracket-wrap.losers-bracket .bracket-round:not(:last-child) .match-slot::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: 16px;
+    height: 1px;
+    background: var(--border);
+  }
+  .bracket-wrap.losers-bracket .bracket-round:not(:first-child) .match-slot::before {
+    content: '';
+    position: absolute;
+    left: 0;
     top: 50%;
     width: 16px;
     height: 1px;
@@ -180,9 +220,11 @@
     {% endwith %}
   {% endif %}
 
+  {% include "tournaments/_placements.html" %}
+
   <!-- Winners Bracket -->
   <div class="section-header">Winners Bracket</div>
-  <div class="bracket-wrap">
+  <div class="bracket-wrap winners-bracket">
     <div class="bracket">
       {% for label, round_matches in wb_rounds %}
         <div class="bracket-round">

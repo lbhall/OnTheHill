@@ -87,15 +87,35 @@
   .match-card.ready .match-player:hover .pick-btn { opacity: 1; }
   .match-card.ready .match-player:hover { background: var(--surface2); }
 
-  /* Connector lines between rounds */
-  .bracket-round:not(:last-child) .match-slot::after {
+  /* Connector lines: L-shape pairs that converge on the next-round match */
+  .bracket-wrap.winners-bracket .bracket-round:not(:last-child) .match-slot:nth-child(odd)::after {
     content: '';
     position: absolute;
     right: 0;
     top: 50%;
+    bottom: 0;
     width: 16px;
-    height: 1px;
-    background: var(--border);
+    border-top: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  .bracket-wrap.winners-bracket .bracket-round:not(:last-child) .match-slot:nth-child(even)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 50%;
+    width: 16px;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  /* Horizontal stub coming INTO each match from the previous round */
+  .bracket-wrap.winners-bracket .bracket-round:not(:first-child) .match-slot::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 16px;
+    border-top: 1px solid var(--border);
   }
 
   .tbd { color: var(--muted); font-style: italic; font-size: 0.82rem; }
@@ -141,7 +161,9 @@
     {% endwith %}
   {% endif %}
 
-  <div class="bracket-wrap">
+  {% include "tournaments/_placements.html" %}
+
+  <div class="bracket-wrap winners-bracket">
     <div class="bracket">
       {% for label, round_matches in bracket %}
         <div class="bracket-round">
@@ -149,7 +171,17 @@
           <div class="round-matches">
             {% for match in round_matches %}
               <div class="match-slot">
-                <div class="match-card {% if match.is_ready %}ready{% elif match.is_complete %}complete{% endif %}">
+                <div class="match-card {% if match.is_ready %}ready{% elif match.is_complete %}complete{% endif %}" style="position:relative;">
+
+                  {% if can_manage and match.winner and not match.is_bye %}
+                    <form method="post" action="{% url 'undo_match_result' tournament.pk match.pk %}"
+                          style="position:absolute;top:2px;right:2px;z-index:2;">
+                      {% csrf_token %}
+                      <button type="submit" title="Undo result"
+                              onclick="return confirm('Undo this result?')"
+                              style="background:transparent;border:none;color:var(--muted);font-size:0.85rem;cursor:pointer;padding:0 4px;line-height:1;">↺</button>
+                    </form>
+                  {% endif %}
 
                   <!-- Player 1 -->
                   <form method="post" action="{% url 'record_match_result' tournament.pk match.pk %}" style="display:contents">
@@ -159,6 +191,7 @@
                       <span class="seed">{% if match.player1 %}{{ match.player1.seed }}{% endif %}</span>
                       <span class="name">
                         {% if match.player1 %}{{ match.player1.player.name }}
+                        {% elif match.is_bye %}<span class="tbd">Bye</span>
                         {% else %}<span class="tbd">TBD</span>{% endif %}
                       </span>
                       {% if can_manage and match.is_ready %}
@@ -175,6 +208,7 @@
                       <span class="seed">{% if match.player2 %}{{ match.player2.seed }}{% endif %}</span>
                       <span class="name">
                         {% if match.player2 %}{{ match.player2.player.name }}
+                        {% elif match.is_bye %}<span class="tbd">Bye</span>
                         {% else %}<span class="tbd">TBD</span>{% endif %}
                       </span>
                       {% if can_manage and match.is_ready %}

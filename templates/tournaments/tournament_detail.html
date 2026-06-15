@@ -24,21 +24,36 @@
       </div>
     </div>
 
-    {% if can_manage and tournament.status == 'pending' %}
-      <form method="post" action="{% url 'start_tournament' tournament.pk %}">
-        {% csrf_token %}
-        <button
-          type="submit"
-          class="btn btn-primary"
-          {% if tournament.player_count < 2 %}disabled title="Need at least 2 players"{% endif %}
-          onclick="return confirm('Start tournament with {{ tournament.player_count }} player{{ tournament.player_count|pluralize }}?')"
-        >
-          ▶ Start Tournament
-        </button>
-      </form>
-    {% elif tournament.status != 'pending' %}
-      <a href="{% url 'bracket' tournament.pk %}" class="btn btn-primary">View Bracket →</a>
-    {% endif %}
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      {% if can_manage and tournament.status == 'pending' %}
+        <form method="post" action="{% url 'start_tournament' tournament.pk %}">
+          {% csrf_token %}
+          <button
+            type="submit"
+            class="btn btn-primary"
+            {% if tournament.player_count < 2 %}disabled title="Need at least 2 players"{% endif %}
+            onclick="return confirm('Start tournament with {{ tournament.player_count }} player{{ tournament.player_count|pluralize }}?')"
+          >
+            ▶ Start Tournament
+          </button>
+        </form>
+      {% elif tournament.status != 'pending' %}
+        <a href="{% url 'bracket' tournament.pk %}" class="btn btn-primary">View Bracket →</a>
+      {% endif %}
+
+      {% if can_manage %}
+        <form method="post" action="{% url 'delete_tournament' tournament.pk %}">
+          {% csrf_token %}
+          <button
+            type="submit"
+            class="btn btn-danger"
+            onclick="return confirm('Delete tournament &quot;{{ tournament.name|escapejs }}&quot;? This cannot be undone.')"
+          >
+            🗑 Delete
+          </button>
+        </form>
+      {% endif %}
+    </div>
   </div>
 
   <div style="display:grid;grid-template-columns:1fr {% if tournament.flyer %}300px{% endif %};gap:24px;align-items:start;">
