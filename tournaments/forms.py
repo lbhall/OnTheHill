@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 
-from .models import Tournament, Venue, Player, TournamentEntry
+from .models import Tournament, Venue, Player, TournamentEntry, Payout
 
 
 class RegisterForm(UserCreationForm):
@@ -44,10 +44,11 @@ class TournamentForm(forms.ModelForm):
 
     class Meta:
         model = Tournament
-        fields = ['name', 'game_type', 'format', 'date', 'entry_fee', 'flyer', 'venue', 'notes']
+        fields = ['name', 'game_type', 'format', 'date', 'entry_fee', 'added_money', 'flyer', 'venue', 'notes']
         widgets = {
             'name': forms.TextInput(attrs={'placeholder': 'Tournament name'}),
             'entry_fee': forms.NumberInput(attrs={'placeholder': '0.00', 'step': '0.01'}),
+            'added_money': forms.NumberInput(attrs={'placeholder': '0.00', 'step': '0.01'}),
             'notes': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Optional notes or rules...'}),
         }
 
@@ -131,3 +132,13 @@ class AddExistingPlayerForm(forms.Form):
             self.fields['player'].queryset = Player.objects.filter(
                 created_by=user
             ).exclude(id__in=already_in)
+
+
+class PayoutForm(forms.ModelForm):
+    class Meta:
+        model = Payout
+        fields = ['place', 'payout_type', 'amount']
+        widgets = {
+            'place': forms.NumberInput(attrs={'placeholder': '1', 'min': '1'}),
+            'amount': forms.NumberInput(attrs={'placeholder': '0.00', 'step': '0.01', 'min': '0'}),
+        }

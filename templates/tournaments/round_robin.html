@@ -25,10 +25,13 @@
             <th>W</th>
             <th>L</th>
             <th>Played</th>
+            {% if payout_map %}
+              <th style="text-align:right;">Prize</th>
+            {% endif %}
           </tr>
         </thead>
         <tbody>
-          {% for row in standings %}
+          {% for row, payout in standings %}
             <tr>
               <td class="text-muted">{{ forloop.counter }}</td>
               <td style="font-weight:{% if forloop.first %}700{% else %}400{% endif %};color:{% if forloop.first %}var(--green){% else %}inherit{% endif %};">
@@ -37,6 +40,11 @@
               <td class="text-green">{{ row.wins }}</td>
               <td style="color:var(--muted);">{{ row.losses }}</td>
               <td class="text-muted">{{ row.played }}</td>
+              {% if payout_map %}
+                <td style="text-align:right;color:var(--green);font-weight:600;">
+                  {% if payout %}${{ payout|floatformat:2 }}{% else %}-{% endif %}
+                </td>
+              {% endif %}
             </tr>
           {% empty %}
             <tr><td colspan="5" class="text-muted" style="text-align:center;padding:16px;">No results yet.</td></tr>

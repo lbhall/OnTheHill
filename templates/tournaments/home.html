@@ -1,14 +1,11 @@
 {% extends 'base.html' %}
-{% block title %}My Tournaments — On The Hill{% endblock %}
+{% block title %}Tournaments — On The Hill{% endblock %}
 
 {% block content %}
 <div class="container">
-  <div class="page-header flex items-center justify-between">
-    <div>
-      <h1>Tournaments</h1>
-      <p>Manage your pool tournaments</p>
-    </div>
-    <a href="{% url 'create_tournament' %}" class="btn btn-primary">+ Create Tournament</a>
+  <div class="page-header">
+    <h1>Tournaments</h1>
+    <p>Browse upcoming and active pool tournaments</p>
   </div>
 
   <!-- Filter -->
@@ -57,8 +54,7 @@
     <div class="card" style="text-align:center;padding:60px 24px;">
       <div style="font-size:3rem;margin-bottom:16px;">🎱</div>
       <h3 style="margin-bottom:8px;">No tournaments yet</h3>
-      <p class="text-muted text-sm" style="margin-bottom:20px;">Create your first tournament to get started.</p>
-      <a href="{% url 'create_tournament' %}" class="btn btn-primary">Create Tournament</a>
+      <p class="text-muted text-sm">No tournaments have been created yet.</p>
     </div>
   {% endif %}
 </div>

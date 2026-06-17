@@ -5,8 +5,8 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
-from .models import Tournament, Player, TournamentEntry, Match
-from .forms import RegisterForm, TournamentForm, PlayerForm, AddExistingPlayerForm
+from .models import Tournament, Player, TournamentEntry, Match, Payout
+from .forms import RegisterForm, TournamentForm, PlayerForm, AddExistingPlayerForm, PayoutForm
 from .bracket import (
     generate_single_elimination,
     generate_double_elimination,
@@ -41,7 +41,6 @@ def register_view(request):
 
 # ── Home ─────────────────────────────────────────────────────────────────────
 
-@login_required
 def home(request):
     status_filter = request.GET.get('status', '')
     tournaments = Tournament.objects.select_related('venue', 'created_by')
@@ -78,20 +77,28 @@ def delete_tournament(request, pk):
     return redirect('home')
 
 
-@login_required
 def tournament_detail(request, pk):
     tournament = get_object_or_404(Tournament, pk=pk)
     entries = tournament.entries.select_related('player').order_by('seed')
 
+    user = request.user if request.user.is_authenticated else None
     new_player_form = PlayerForm()
-    existing_player_form = AddExistingPlayerForm(user=request.user, tournament=tournament)
+    existing_player_form = AddExistingPlayerForm(user=user, tournament=tournament)
+
+    total_pot = tournament.total_pot()
+    payouts = tournament.payouts.all()
+    payouts_with_amounts = [(p, p.calculated_amount(total_pot)) for p in payouts]
+    payout_form = PayoutForm()
 
     return render(request, 'tournaments/tournament_detail.html', {
         'tournament': tournament,
         'entries': entries,
         'new_player_form': new_player_form,
         'existing_player_form': existing_player_form,
-        'can_manage': tournament.created_by == request.user,
+        'can_manage': user is not None and tournament.created_by == user,
+        'payouts_with_amounts': payouts_with_amounts,
+        'total_pot': total_pot,
+        'payout_form': payout_form,
     })
 
 
@@ -195,31 +202,72 @@ def start_tournament(request, pk):
     return redirect('bracket', pk=pk)
 
 
-@login_required
 def bracket_view(request, pk):
     tournament = get_object_or_404(Tournament, pk=pk)
     if tournament.status == 'pending':
         messages.error(request, 'Tournament has not started yet.')
         return redirect('tournament_detail', pk=pk)
 
-    context = {'tournament': tournament, 'can_manage': tournament.created_by == request.user}
+    total_pot = tournament.total_pot()
+    payouts = tournament.payouts.all()
+    payout_map = {p.place: p.calculated_amount(total_pot) for p in payouts}
+
+    context = {
+        'tournament': tournament,
+        'can_manage': request.user.is_authenticated and tournament.created_by == request.user,
+        'payout_map': payout_map,
+        'total_pot': total_pot,
+    }
 
     if tournament.format == 'single_elim':
         rounds = get_bracket_rounds(tournament)
         round_labels = _round_labels(rounds)
         context['bracket'] = list(zip(round_labels, rounds))
-        context['placements'] = get_se_placements(tournament)
+        placements = get_se_placements(tournament)
+        context['placements'] = [(label, entries, payout_map.get(i + 1)) for i, (label, entries) in enumerate(placements)]
         return render(request, 'tournaments/bracket.html', context)
     elif tournament.format == 'double_elim':
         context.update(get_de_data(tournament))
-        context['placements'] = get_de_placements(tournament)
+        placements = get_de_placements(tournament)
+        context['placements'] = [(label, entries, payout_map.get(i + 1)) for i, (label, entries) in enumerate(placements)]
         return render(request, 'tournaments/double_elimination.html', context)
     else:
         matches = tournament.matches.select_related('player1__player', 'player2__player', 'winner__player')
         standings = get_round_robin_standings(tournament)
         context['matches'] = matches
-        context['standings'] = standings
+        context['standings'] = [(row, payout_map.get(i + 1)) for i, row in enumerate(standings)]
         return render(request, 'tournaments/round_robin.html', context)
+
+
+# ── Payouts ───────────────────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def add_payout(request, pk):
+    tournament = get_object_or_404(Tournament, pk=pk, created_by=request.user)
+    form = PayoutForm(request.POST)
+    if form.is_valid():
+        payout = form.save(commit=False)
+        payout.tournament = tournament
+        try:
+            payout.save()
+            messages.success(request, f'Payout for place #{payout.place} added.')
+        except Exception:
+            messages.error(request, f'A payout for place #{payout.place} already exists.')
+    else:
+        for error in form.errors.values():
+            messages.error(request, error)
+    return redirect('tournament_detail', pk=pk)
+
+
+@login_required
+@require_POST
+def remove_payout(request, pk, payout_id):
+    tournament = get_object_or_404(Tournament, pk=pk, created_by=request.user)
+    payout = get_object_or_404(Payout, pk=payout_id, tournament=tournament)
+    payout.delete()
+    messages.success(request, 'Payout removed.')
+    return redirect('tournament_detail', pk=pk)
 
 
 def _round_labels(rounds):
