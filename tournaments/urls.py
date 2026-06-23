@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, api
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -15,6 +15,10 @@ urlpatterns = [
     path('tournaments/<int:pk>/bracket/', views.bracket_view, name='bracket'),
     path('tournaments/<int:pk>/result/<int:match_id>/', views.record_match_result, name='record_match_result'),
     path('tournaments/<int:pk>/undo/<int:match_id>/', views.undo_match_result, name='undo_match_result'),
+    path('tournaments/<int:pk>/edit-money/', views.edit_tournament_money, name='edit_tournament_money'),
     path('tournaments/<int:pk>/payouts/add/', views.add_payout, name='add_payout'),
     path('tournaments/<int:pk>/payouts/<int:payout_id>/remove/', views.remove_payout, name='remove_payout'),
+
+    path('api-token/', views.api_token_view, name='api_token'),
+    path('api/tournaments/', api.create_tournament, name='api_create_tournament'),
 ]

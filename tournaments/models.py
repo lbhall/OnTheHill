@@ -1,3 +1,4 @@
+import secrets
 from decimal import Decimal
 
 from django.db import models
@@ -70,6 +71,23 @@ class Tournament(models.Model):
         fee = self.entry_fee or Decimal('0')
         added = self.added_money or Decimal('0')
         return (fee * self.player_count()) + added
+
+    def payout_amounts(self):
+        """Map {place: Decimal} of calculated payouts.
+
+        Flat-rate payouts come off the top first; percentages are then applied
+        to whatever remains. This keeps the total payout equal to the total pot
+        when percentages sum to 100%, regardless of how many flat slots exist.
+        """
+        payouts = list(self.payouts.all())
+        flat_total = sum(
+            (p.amount for p in payouts if p.payout_type == 'flat'),
+            Decimal('0'),
+        )
+        percentage_base = self.total_pot() - flat_total
+        if percentage_base < 0:
+            percentage_base = Decimal('0')
+        return {p.place: p.calculated_amount(percentage_base) for p in payouts}
 
     class Meta:
         ordering = ['-created_at']
@@ -155,7 +173,29 @@ class Payout(models.Model):
         suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(self.place, 'th')
         return f"{self.place}{suffix} place — {self.tournament.name}"
 
-    def calculated_amount(self, total_pot):
+    def calculated_amount(self, percentage_base):
+        """Flat payouts return their fixed amount; percentages apply to
+        `percentage_base` (typically total_pot minus the sum of flat payouts —
+        see Tournament.payout_amounts)."""
         if self.payout_type == 'flat':
             return self.amount
-        return (self.amount / Decimal('100')) * total_pot
+        return (self.amount / Decimal('100')) * percentage_base
+
+
+class ApiToken(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='api_token')
+    key = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"API token for {self.user.username}"
+
+    @classmethod
+    def generate_for(cls, user):
+        """Create or rotate the token for `user` and return the new instance."""
+        token, _ = cls.objects.update_or_create(
+            user=user,
+            defaults={'key': secrets.token_hex(32)},
+        )
+        return token

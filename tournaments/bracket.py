@@ -323,9 +323,9 @@ def _de_advance(tournament, match):
                 lb_slot = 1 if match.match_number % 2 == 1 else 2
                 _de_set_lb_slot(tournament, 1, lb_m, loser, lb_slot)
             else:
-                # WBR(k) losers for k >= 2 → LBR(2k-2), same match number, slot 2
                 lb_r = 2 * (match.round_number - 1)
-                _de_set_lb_slot(tournament, lb_r, match.match_number, loser, 2)
+                lb_m = _wb_loser_lb_match(match.round_number, match.match_number, wb_rounds)
+                _de_set_lb_slot(tournament, lb_r, lb_m, loser, 2)
 
     elif match.bracket == 'losers':
         if match.round_number < lb_rounds:
@@ -358,6 +358,22 @@ def _de_advance(tournament, match):
                         player2=match.player2,
                     )
         # round 2 (bracket reset) winner = champion; no further routing needed
+
+
+def _wb_loser_lb_match(wb_round, wb_match_num, wb_rounds):
+    """
+    LB match number a WBR(k>=2) loser drops into.
+
+    For WBR2, reverse the match order so a loser doesn't immediately rematch
+    the WBR1 opponent they just beat. (WBR1 M_k loser ends up in LBR2 M_k slot 1
+    via LBR1; routing the WBR2 M_k loser into the *opposite* LBR2 match keeps
+    them apart.) Deeper rounds keep the natural mapping — reversing further
+    introduces new same-WBR2-pair rematches in LBR4.
+    """
+    if wb_round == 2:
+        lb_match_count = 2 ** (wb_rounds - 2)
+        return lb_match_count - wb_match_num + 1
+    return wb_match_num
 
 
 def _lb_next_slot(r, m):
@@ -556,9 +572,10 @@ def _de_routing_targets(tournament, match):
                     targets.append((t, lb_slot))
             else:
                 lb_r = 2 * (match.round_number - 1)
+                lb_m = _wb_loser_lb_match(match.round_number, match.match_number, wb_rounds)
                 t = Match.objects.filter(
                     tournament=tournament, bracket='losers',
-                    round_number=lb_r, match_number=match.match_number,
+                    round_number=lb_r, match_number=lb_m,
                 ).first()
                 if t:
                     targets.append((t, 2))
@@ -667,7 +684,9 @@ def _ordinal(n):
 
 def get_se_placements(tournament):
     """
-    Ordered list of (label, [entries]) for single-elimination placements.
+    Ordered list of (label, [entries], start_place) for single-elimination
+    placements. start_place is the numeric finish for the first tied entry;
+    additional tied entries cover places start_place + 1, start_place + 2, ....
     Only includes the winner (if tournament is complete) and eliminated players.
     Players still alive in the bracket are omitted.
     """
@@ -684,7 +703,7 @@ def get_se_placements(tournament):
 
     final = matches_by_round[max_round][0]
     if final.winner_id:
-        results.append(('1st', [final.winner]))
+        results.append(('1st', [final.winner], 1))
 
     for r in sorted(matches_by_round.keys(), reverse=True):
         losers = []
@@ -699,14 +718,16 @@ def get_se_placements(tournament):
         label = _ordinal(pos)
         if len(losers) > 1:
             label = f'T-{label}'
-        results.append((label, losers))
+        results.append((label, losers, pos))
 
     return results
 
 
 def get_de_placements(tournament):
     """
-    Ordered list of (label, [entries]) for double-elimination placements.
+    Ordered list of (label, [entries], start_place) for double-elimination
+    placements. start_place is the numeric finish for the first tied entry;
+    additional tied entries cover places start_place + 1, start_place + 2, ....
     Placements are STRUCTURAL — they reserve positions for rounds that haven't
     been played yet, so an LB-R2 loser is shown at T-9th regardless of whether
     the GF or higher LB rounds have been decided.
@@ -730,9 +751,9 @@ def get_de_placements(tournament):
         runnerup = gf_r1.player2 if gf_r1.winner_id == gf_r1.player1_id else gf_r1.player1
 
     if winner:
-        results.append(('1st', [winner]))
+        results.append(('1st', [winner], 1))
     if runnerup:
-        results.append(('2nd', [runnerup]))
+        results.append(('2nd', [runnerup], 2))
 
     real_slots = _de_real_lb_slots_per_round(tournament)
 
@@ -755,7 +776,7 @@ def get_de_placements(tournament):
             label = _ordinal(pos)
             if structural_count > 1:
                 label = f'T-{label}'
-            results.append((label, losers))
+            results.append((label, losers, pos))
 
         above += structural_count
 

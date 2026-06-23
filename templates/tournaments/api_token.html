@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}API Token — On The Hill{% endblock %}
+
+{% block content %}
+<div class="container-sm">
+  <div class="page-header">
+    <h1>API Token</h1>
+    <p>Authenticate programmatic requests by sending <code>Authorization: Token &lt;hex&gt;</code>.</p>
+  </div>
+
+  <div class="card">
+    {% if reveal %}
+      <div class="form-group">
+        <label>Your new token</label>
+        <input type="text" value="{{ token.key }}" readonly onclick="this.select()" style="font-family:monospace;font-size:0.85rem;">
+        <p class="text-muted text-sm" style="margin-top:6px;">Copy this now — the full key is only displayed at generation time.</p>
+      </div>
+    {% elif token %}
+      <p>You have an active API token.</p>
+      <p class="text-muted text-sm">
+        Created {{ token.created_at|date:'Y-m-d H:i' }}
+        {% if token.last_used_at %} · Last used {{ token.last_used_at|date:'Y-m-d H:i' }}{% endif %}
+      </p>
+      <p class="text-muted text-sm" style="margin-top:6px;">Rotate to issue a new key (the current one stops working immediately).</p>
+    {% else %}
+      <p class="text-muted">You don't have an API token yet.</p>
+    {% endif %}
+
+    <form method="post" style="margin-top:16px;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary"
+              {% if token %}onclick="return confirm('Rotate token? The current key will stop working immediately.')"{% endif %}>
+        {% if token %}Rotate Token{% else %}Generate Token{% endif %}
+      </button>
+    </form>
+  </div>
+
+  <div class="card" style="margin-top:24px;">
+    <div class="card-header"><span class="card-title">Create a tournament via API</span></div>
+    <p class="text-muted text-sm" style="margin-bottom:12px;">
+      <code>POST /api/tournaments/</code> with a JSON body. Teams are registered as individual entrants in the order given.
+    </p>
+<pre style="background:var(--surface2);padding:12px;border-radius:6px;overflow-x:auto;font-size:0.8rem;">curl -X POST http{% if request.is_secure %}s{% endif %}://{{ request.get_host }}/api/tournaments/ \
+  -H "Authorization: Token YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Friday Night 9-Ball",
+    "game_type": "9ball",
+    "format": "double_elim",
+    "entry_fee": 20,
+    "teams": ["Alice", "Bob", "Carol", "Dave"]
+  }'</pre>
+    <p class="text-muted text-sm" style="margin-top:12px;">
+      Optional fields: <code>date</code> (YYYY-MM-DD), <code>added_money</code>, <code>venue_id</code>, <code>notes</code>.
+      Each team may also be an object: <code>{"name": "Alice", "email": "...", "phone": "..."}</code>.
+    </p>
+  </div>
+</div>
+{% endblock %}

@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
-from .models import Tournament, Player, TournamentEntry, Match, Payout
+from .models import Tournament, Player, TournamentEntry, Match, Payout, ApiToken
 from .forms import RegisterForm, TournamentForm, PlayerForm, AddExistingPlayerForm, PayoutForm
 from .bracket import (
     generate_single_elimination,
@@ -86,8 +86,8 @@ def tournament_detail(request, pk):
     existing_player_form = AddExistingPlayerForm(user=user, tournament=tournament)
 
     total_pot = tournament.total_pot()
-    payouts = tournament.payouts.all()
-    payouts_with_amounts = [(p, p.calculated_amount(total_pot)) for p in payouts]
+    payout_amounts = tournament.payout_amounts()
+    payouts_with_amounts = [(p, payout_amounts[p.place]) for p in tournament.payouts.all()]
     payout_form = PayoutForm()
 
     return render(request, 'tournaments/tournament_detail.html', {
@@ -209,8 +209,7 @@ def bracket_view(request, pk):
         return redirect('tournament_detail', pk=pk)
 
     total_pot = tournament.total_pot()
-    payouts = tournament.payouts.all()
-    payout_map = {p.place: p.calculated_amount(total_pot) for p in payouts}
+    payout_map = tournament.payout_amounts()
 
     context = {
         'tournament': tournament,
@@ -224,12 +223,18 @@ def bracket_view(request, pk):
         round_labels = _round_labels(rounds)
         context['bracket'] = list(zip(round_labels, rounds))
         placements = get_se_placements(tournament)
-        context['placements'] = [(label, entries, payout_map.get(i + 1)) for i, (label, entries) in enumerate(placements)]
+        context['placements'] = [
+            (label, entries, _placement_payout(payout_map, start_place, len(entries)))
+            for label, entries, start_place in placements
+        ]
         return render(request, 'tournaments/bracket.html', context)
     elif tournament.format == 'double_elim':
         context.update(get_de_data(tournament))
         placements = get_de_placements(tournament)
-        context['placements'] = [(label, entries, payout_map.get(i + 1)) for i, (label, entries) in enumerate(placements)]
+        context['placements'] = [
+            (label, entries, _placement_payout(payout_map, start_place, len(entries)))
+            for label, entries, start_place in placements
+        ]
         return render(request, 'tournaments/double_elimination.html', context)
     else:
         matches = tournament.matches.select_related('player1__player', 'player2__player', 'winner__player')
@@ -243,8 +248,44 @@ def bracket_view(request, pk):
 
 @login_required
 @require_POST
+def edit_tournament_money(request, pk):
+    from decimal import Decimal, InvalidOperation
+    tournament = get_object_or_404(Tournament, pk=pk, created_by=request.user)
+    if tournament.status == 'completed':
+        messages.error(request, 'Cannot edit pot on a completed tournament.')
+        return redirect('tournament_detail', pk=pk)
+
+    def parse(raw, label):
+        raw = (raw or '').strip()
+        if raw == '':
+            return None
+        try:
+            value = Decimal(raw)
+        except InvalidOperation:
+            raise ValueError(f'{label} must be a number.')
+        if value < 0:
+            raise ValueError(f'{label} cannot be negative.')
+        return value
+
+    try:
+        tournament.entry_fee = parse(request.POST.get('entry_fee'), 'Entry fee')
+        tournament.added_money = parse(request.POST.get('added_money'), 'Added money') or Decimal('0')
+    except ValueError as e:
+        messages.error(request, str(e))
+        return redirect('tournament_detail', pk=pk)
+
+    tournament.save(update_fields=['entry_fee', 'added_money'])
+    messages.success(request, 'Pot updated.')
+    return redirect('tournament_detail', pk=pk)
+
+
+@login_required
+@require_POST
 def add_payout(request, pk):
     tournament = get_object_or_404(Tournament, pk=pk, created_by=request.user)
+    if tournament.status == 'completed':
+        messages.error(request, 'Cannot edit payouts on a completed tournament.')
+        return redirect('tournament_detail', pk=pk)
     form = PayoutForm(request.POST)
     if form.is_valid():
         payout = form.save(commit=False)
@@ -264,10 +305,43 @@ def add_payout(request, pk):
 @require_POST
 def remove_payout(request, pk, payout_id):
     tournament = get_object_or_404(Tournament, pk=pk, created_by=request.user)
+    if tournament.status == 'completed':
+        messages.error(request, 'Cannot edit payouts on a completed tournament.')
+        return redirect('tournament_detail', pk=pk)
     payout = get_object_or_404(Payout, pk=payout_id, tournament=tournament)
     payout.delete()
     messages.success(request, 'Payout removed.')
     return redirect('tournament_detail', pk=pk)
+
+
+# ── API Token management ─────────────────────────────────────────────────────
+
+@login_required
+def api_token_view(request):
+    if request.method == 'POST':
+        token = ApiToken.generate_for(request.user)
+        messages.success(request, 'API token generated. Copy it now — it won\'t be shown again in the clear.')
+        return render(request, 'tournaments/api_token.html', {'token': token, 'reveal': True})
+
+    token = ApiToken.objects.filter(user=request.user).first()
+    return render(request, 'tournaments/api_token.html', {'token': token, 'reveal': False})
+
+
+def _placement_payout(payout_map, start_place, entry_count):
+    """Per-player payout for a placement that spans `entry_count` places.
+
+    For ties, players split the combined payouts of every place they cover —
+    e.g. two T-7th players split (7th payout + 8th payout) evenly. Places with
+    no configured payout contribute $0, and a wholly unpaid placement returns
+    None so the template can skip the payout column.
+    """
+    from decimal import Decimal
+    total = Decimal('0')
+    for place in range(start_place, start_place + entry_count):
+        total += payout_map.get(place, Decimal('0'))
+    if total == 0:
+        return None
+    return total / entry_count
 
 
 def _round_labels(rounds):

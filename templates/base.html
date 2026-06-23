@@ -232,6 +232,7 @@
     {% if user.is_authenticated %}
       <span class="nav-username">{{ user.username }}</span>
       <a href="{% url 'create_tournament' %}">+ New Tournament</a>
+      <a href="{% url 'api_token' %}">API Token</a>
       <form method="post" action="{% url 'logout' %}" style="display:inline">
         {% csrf_token %}
         <button type="submit">Log out</button>
