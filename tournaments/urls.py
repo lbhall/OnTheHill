@@ -20,5 +20,7 @@ urlpatterns = [
     path('tournaments/<int:pk>/payouts/<int:payout_id>/remove/', views.remove_payout, name='remove_payout'),
 
     path('api-token/', views.api_token_view, name='api_token'),
+    path('api/token/', api.obtain_token, name='api_obtain_token'),
     path('api/tournaments/', api.create_tournament, name='api_create_tournament'),
+    path('api/tournaments/<int:pk>/payouts/', api.add_payout, name='api_add_payout'),
 ]

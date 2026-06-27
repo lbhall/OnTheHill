@@ -16,6 +16,7 @@ from .models import (
     ApiToken,
     GAME_CHOICES,
     FORMAT_CHOICES,
+    Payout,
     Player,
     Tournament,
     TournamentEntry,
@@ -56,6 +57,7 @@ def _parse_decimal(value, field):
 
 VALID_GAMES = {c[0] for c in GAME_CHOICES}
 VALID_FORMATS = {c[0] for c in FORMAT_CHOICES}
+VALID_PAYOUT_TYPES = {c[0] for c in Payout.PAYOUT_TYPES}
 
 
 @csrf_exempt
@@ -172,3 +174,89 @@ def create_tournament(request):
         'entries': entries_out,
         'url': request.build_absolute_uri(f'/tournaments/{tournament.id}/'),
     }, status=201)
+
+
+@csrf_exempt
+@require_POST
+def add_payout(request, pk):
+    user = _authenticate(request)
+    if not user:
+        return _err('Invalid or missing API token. Send `Authorization: Token <hex>`.', status=401)
+
+    try:
+        tournament = Tournament.objects.get(pk=pk, created_by=user)
+    except Tournament.DoesNotExist:
+        return _err(f'Tournament {pk} not found.', status=404)
+
+    if tournament.status == 'completed':
+        return _err('Cannot edit payouts on a completed tournament.')
+
+    try:
+        data = json.loads(request.body or b'{}')
+    except json.JSONDecodeError:
+        return _err('Request body must be valid JSON.')
+    if not isinstance(data, dict):
+        return _err('Request body must be a JSON object.')
+
+    place = data.get('place')
+    try:
+        place = int(place)
+        if place < 1:
+            raise ValueError
+    except (TypeError, ValueError):
+        return _err('`place` must be a positive integer.')
+
+    payout_type = data.get('payout_type')
+    if payout_type not in VALID_PAYOUT_TYPES:
+        return _err(f'`payout_type` must be one of: {sorted(VALID_PAYOUT_TYPES)}.')
+
+    try:
+        amount = _parse_decimal(data.get('amount'), 'amount')
+    except ValueError as e:
+        return _err(str(e))
+    if amount is None or amount < 0:
+        return _err('`amount` is required and cannot be negative.')
+
+    if Payout.objects.filter(tournament=tournament, place=place).exists():
+        return _err(f'A payout for place #{place} already exists.', status=409)
+
+    payout = Payout.objects.create(
+        tournament=tournament,
+        place=place,
+        payout_type=payout_type,
+        amount=amount,
+    )
+
+    return JsonResponse({
+        'id': payout.id,
+        'tournament_id': tournament.id,
+        'place': payout.place,
+        'payout_type': payout.payout_type,
+        'amount': str(payout.amount),
+    }, status=201)
+
+
+@csrf_exempt
+@require_POST
+def obtain_token(request):
+    try:
+        data = json.loads(request.body or b'{}')
+    except json.JSONDecodeError:
+        return _err('Request body must be valid JSON.')
+    if not isinstance(data, dict):
+        return _err('Request body must be a JSON object.')
+
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    if not username or not password:
+        return _err('`username` and `password` are required.')
+
+    user = authenticate(request, username=username, password=password)
+    if user is None:
+        return _err('Invalid credentials.', status=401)
+
+    token = ApiToken.objects.filter(user=user).first()
+    if token is None:
+        token = ApiToken.generate_for(user)
+
+    return JsonResponse({'token': token.key})
