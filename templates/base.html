@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}On The Hill{% endblock %}</title>
+  <title>{% block title %}ReadySetTourney{% endblock %}</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -227,7 +227,7 @@
 <body>
 
 <nav>
-  <a href="{% url 'home' %}" class="nav-brand">On The Hill</a>
+  <a href="{% url 'home' %}" class="nav-brand">ReadySetTourney</a>
   <div class="nav-links">
     {% if user.is_authenticated %}
       <span class="nav-username">{{ user.username }}</span>
